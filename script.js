@@ -1,6 +1,21 @@
 // Initialize jsPDF
 window.jsPDF = window.jspdf.jsPDF;
 
+// Get Operation Number for Filename
+function getOperationNumber() {
+  // Find the input field with "رقم التشغيل" label
+  const headers = document.querySelectorAll('.w-28.sm\\:w-32.bg-gray-100');
+  for (const header of headers) {
+    if (header.textContent.trim() === 'رقم التشغيل') {
+      const input = header.parentElement.querySelector('input[type="text"]');
+      if (input && input.value.trim()) {
+        return input.value.trim().replace(/[^a-zA-Z0-9\u0600-\u06FF_-]/g, '_');
+      }
+    }
+  }
+  return 'تقرير_فحص_حافلة';
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   // DOM Elements
   const printBtn = document.querySelector('button[title="طباعة"]');
@@ -460,7 +475,8 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       
       const timestamp = new Date().toISOString().slice(0,10);
-      pdf.save(`تقرير_فحص_حافلة_${timestamp}.pdf`);
+      const operationNumber = getOperationNumber();
+      pdf.save(`${operationNumber}_${timestamp}.pdf`);
       showToast('✅ تم تصدير التقرير مع التحليل الذكي بنجاح!', 'success');
     } catch (e) {
       console.error(e);
