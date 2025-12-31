@@ -18,23 +18,36 @@ document.addEventListener('DOMContentLoaded', function () {
     const desktopRows = Array.from(document.querySelectorAll('table tbody tr')).filter(r => !r.querySelector('.percent-badge'));
     const mobileCards = Array.from(document.querySelectorAll('.lg\\:hidden .p-4.flex.flex-col.gap-3'));
     
-    for (let i = 0; i < desktopRows.length; i++) {
-       const row = desktopRows[i];
-       const itemName = row.cells[0].innerText.trim();
+    // Validate based on current view (mobile or desktop)
+    const itemsToCheck = isMobile ? mobileCards : desktopRows;
+    
+    for (let i = 0; i < itemsToCheck.length; i++) {
+       const item = itemsToCheck[i];
+       let itemName, select, sectionName;
        
-       // Exceptions: Bus Diagram
-       if (itemName.includes('مخطط الحافلة')) continue;
+       if (isMobile) {
+         // Mobile card
+         const nameEl = item.querySelector('.font-medium');
+         itemName = nameEl ? nameEl.innerText.trim() : 'بند';
+         select = item.querySelector('select');
+         const cardContainer = item.closest('.rounded-lg');
+         const headerEl = cardContainer ? cardContainer.querySelector('.bg-gray-100') : null;
+         sectionName = headerEl ? headerEl.innerText.trim() : '';
+       } else {
+         // Desktop row
+         itemName = item.cells[0] ? item.cells[0].innerText.trim() : 'بند';
+         select = item.querySelector('select');
+         const table = item.closest('table');
+         const headerEl = table ? table.querySelector('th[colspan]') : null;
+         sectionName = headerEl ? headerEl.innerText.trim() : '';
+       }
        
-       const select = row.querySelector('select');
+       // Exceptions: Bus Diagram and Notes columns
+       if (itemName.includes('مخطط الحافلة') || itemName.includes('ملاحظات')) continue;
+       
        // If select exists and is empty (mandatory)
        if (select && !select.value) {
-          const sectionName = row.closest('table').querySelector('th').innerText.trim();
-          let target = select;
-          // If mobile, scroll to the card instead of the hidden table row
-          if (isMobile && mobileCards[i]) {
-             target = mobileCards[i];
-          }
-          return { name: itemName, section: sectionName, element: target };
+          return { name: itemName, section: sectionName, element: item };
        }
     }
     return null;
@@ -44,11 +57,20 @@ document.addEventListener('DOMContentLoaded', function () {
      const error = validateFullForm();
      if (error) {
         showToast(`عفواً: يرجى إكمال بند "${error.name}" في قسم "${error.section}" أولاً`, 'error');
-        error.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Visual cue
+        
+        // Scroll with offset for mobile devices to account for fixed header
+        const yOffset = -100; // Offset for fixed progress bar
+        const element = error.element;
+        const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+        
+        window.scrollTo({ top: y, behavior: 'smooth' });
+        
+        // Visual cue - works on both mobile and desktop
         if (error.element.classList) {
            error.element.classList.add('ring-2', 'ring-red-500', 'bg-red-50');
-           setTimeout(() => error.element.classList.remove('ring-2', 'ring-red-500', 'bg-red-50'), 2000);
+           setTimeout(() => {
+              error.element.classList.remove('ring-2', 'ring-red-500', 'bg-red-50');
+           }, 2500);
         }
         return;
      }
@@ -592,10 +614,13 @@ document.addEventListener('DOMContentLoaded', function () {
            // Disable manual checkbox interaction
            inputs.pass.style.pointerEvents = 'none';
            inputs.pass.style.opacity = '0.6';
+           inputs.pass.style.cursor = 'not-allowed';
            inputs.fail.style.pointerEvents = 'none';
            inputs.fail.style.opacity = '0.6';
+           inputs.fail.style.cursor = 'not-allowed';
            
-           inputs.select.addEventListener('change', () => {
+           // Use both 'change' and 'input' events for better mobile support
+           const handleSelectChange = () => {
               const val = inputs.select.value;
               let p = false;
               let f = false;
@@ -611,20 +636,27 @@ document.addEventListener('DOMContentLoaded', function () {
                  }
               }
               syncAndTrigger(p, f, val);
-           });
+           };
+           
+           inputs.select.addEventListener('change', handleSelectChange);
+           inputs.select.addEventListener('input', handleSelectChange);
         } else {
            // Fallback for rows without select
-           inputs.pass.addEventListener('change', () => {
+           const handlePassChange = () => {
               if (inputs.pass.checked) inputs.fail.checked = false;
               syncAndTrigger(inputs.pass.checked, inputs.fail.checked, undefined);
-           });
-           inputs.fail.addEventListener('change', () => {
+           };
+           
+           const handleFailChange = () => {
               if (inputs.fail.checked) {
                  inputs.pass.checked = false;
                  showToast(`تنبيه: تم تسجيل فشل في بند "${itemName}"`, 'error');
               }
               syncAndTrigger(inputs.pass.checked, inputs.fail.checked, undefined);
-           });
+           };
+           
+           inputs.pass.addEventListener('change', handlePassChange);
+           inputs.fail.addEventListener('change', handleFailChange);
         }
      };
 
@@ -987,4 +1019,37 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('input[type="date"]:not([value])').forEach(i => i.value = today);
   document.querySelectorAll('table').forEach(updateTableStatus);
   renderPrintMarkers();
+  
+  // Prevent zoom on iOS when focusing on inputs
+  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+      viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    }
+  }
+  
+  // Add resize listener to handle orientation changes
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      // Re-initialize canvas sizes for signature boxes
+      signatureBoxes.forEach(canvas => {
+        resizeCanvasToDisplaySize(canvas);
+        setupSignatureContext(canvas.getContext('2d'));
+      });
+      
+      // Update UI
+      updateProgressBar();
+    }, 250);
+  });
+  
+  // Handle visibility change (when user switches tabs or apps)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      // User returned to the page, ensure everything is up to date
+      document.querySelectorAll('table').forEach(updateTableStatus);
+      updateProgressBar();
+    }
+  });
 });
