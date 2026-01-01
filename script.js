@@ -441,46 +441,109 @@ document.addEventListener('DOMContentLoaded', function () {
   // 🤖 AI-Powered PDF Export with Intelligent Summary
   async function exportToPDF() {
     try {
-      // Generate AI Summary before export
-      const aiSummary = generateAIReport();
-      
-      // Show AI summary in a temporary element
-      const summaryDiv = document.createElement('div');
-      summaryDiv.className = 'ai-summary-export';
-      summaryDiv.style.cssText = 'background: #f0f9ff; padding: 20px; margin: 20px 0; border: 2px solid #3b82f6; border-radius: 8px;';
-      summaryDiv.innerHTML = `<h3 style="color: #1e40af; margin-bottom: 10px;">🤖 التحليل الذكي للنموذج</h3><pre style="white-space: pre-wrap; font-family: Cairo, sans-serif; line-height: 1.8;">${aiSummary}</pre>`;
-      
-      const container = document.querySelector('.form-container');
-      container.insertBefore(summaryDiv, container.firstChild);
-      
-      // Export with AI summary
-      const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#fff' });
-      
-      // Remove summary after capture
-      summaryDiv.remove();
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
-      const w = 210;
-      const h = canvas.height * w / canvas.width;
-      let heightLeft = h;
-      let position = 0;
-      pdf.addImage(imgData, 'PNG', 0, position, w, h);
-      heightLeft -= 297;
-      while (heightLeft >= 0) {
-        position = heightLeft - h;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, w, h);
-        heightLeft -= 297;
+      // Validate before export
+      const error = validateFullForm();
+      if (error) {
+        showToast(`عفواً: يرجى إكمال بند "${error.name}" في قسم "${error.section}" أولاً`, 'error');
+        return;
       }
       
-      const timestamp = new Date().toISOString().slice(0,10);
+      showToast('⏳ جاري تحضير ملف PDF...', 'info');
+      
+      // Prepare form for capture (same as print)
+      // Copy textarea content to print divs
+      document.querySelectorAll('textarea').forEach(textarea => {
+        const parent = textarea.closest('.grid');
+        if (parent) {
+          const printDiv = parent.querySelector('.print\\:block');
+          if (printDiv) {
+            printDiv.textContent = textarea.value;
+          }
+        }
+      });
+      
+      // Copy date values to print spans
+      document.querySelectorAll('input[type="date"]').forEach(dateInput => {
+        if (dateInput.value) {
+          const parent = dateInput.parentElement;
+          if (parent && parent.classList.contains('relative')) {
+            const printSpan = parent.querySelector('.print\\:flex span');
+            if (printSpan) {
+              const date = new Date(dateInput.value);
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              printSpan.textContent = `${year}/${month}/${day}`;
+            }
+          }
+        }
+      });
+      
+      // Copy select values to print divs
+      document.querySelectorAll('select').forEach(select => {
+        if (select.value) {
+          const parent = select.parentElement;
+          if (parent) {
+            const printDiv = parent.querySelector('.print\\:block');
+            if (printDiv) {
+              printDiv.textContent = select.value;
+            }
+          }
+        }
+      });
+      
+      // Temporarily hide no-print elements
+      const noPrintElements = document.querySelectorAll('.no-print');
+      noPrintElements.forEach(el => el.style.display = 'none');
+      
+      // Capture the form
+      const container = document.querySelector('.form-container');
+      const canvas = await html2canvas(container, { 
+        scale: 1.5, 
+        useCORS: true, 
+        backgroundColor: '#fff',
+        logging: false,
+        windowWidth: 1200
+      });
+      
+      // Restore no-print elements
+      noPrintElements.forEach(el => el.style.display = '');
+      
+      // Generate PDF - fit to single page
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+      
+      // A4 dimensions in mm
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+      
+      // Calculate dimensions to fit entire content on one page
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      // If height exceeds page, scale down to fit
+      if (imgHeight > pdfHeight) {
+        const scale = pdfHeight / imgHeight;
+        const finalWidth = imgWidth * scale;
+        const finalHeight = pdfHeight;
+        const xOffset = (pdfWidth - finalWidth) / 2; // Center horizontally
+        pdf.addImage(imgData, 'PNG', xOffset, 0, finalWidth, finalHeight);
+      } else {
+        // Content fits, center vertically
+        const yOffset = (pdfHeight - imgHeight) / 2;
+        pdf.addImage(imgData, 'PNG', 0, yOffset, imgWidth, imgHeight);
+      }
+      
+      // Save with operation number
       const operationNumber = getOperationNumber();
+      const timestamp = new Date().toISOString().slice(0,10);
       pdf.save(`${operationNumber}_${timestamp}.pdf`);
-      showToast('✅ تم تصدير التقرير مع التحليل الذكي بنجاح!', 'success');
+      
+      showToast('✅ تم حفظ ملف PDF بنجاح!', 'success');
+      
     } catch (e) {
       console.error(e);
-      showToast('خطأ في التصدير.', 'error');
+      showToast('خطأ في التصدير: ' + e.message, 'error');
     }
   }
 
