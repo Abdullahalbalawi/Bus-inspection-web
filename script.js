@@ -1698,4 +1698,147 @@ document.addEventListener('DOMContentLoaded', function () {
       hideAIModal();
     }
   });
+
+  // ===== NOTES MODAL HANDLERS =====
+  const notesModal = document.getElementById('notesModal');
+  const notesModalTextarea = document.getElementById('notesModalTextarea');
+  const notesModalLabel = document.getElementById('notesModalLabel');
+  const notesCharCount = document.getElementById('notesCharCount');
+  const notesModalClose = document.getElementById('notesModalClose');
+  const notesCancelBtn = document.getElementById('notesCancelBtn');
+  const notesSaveBtn = document.getElementById('notesSaveBtn');
+  let currentNotesTextarea = null;
+
+  // Function to show notes modal
+  function showNotesModal(textarea) {
+    currentNotesTextarea = textarea;
+    
+    // Ensure modal textarea is not disabled or readonly
+    notesModalTextarea.removeAttribute('disabled');
+    notesModalTextarea.removeAttribute('readonly');
+    notesModalTextarea.value = textarea.value;
+    updateCharCount();
+    
+    // Set label based on which section this textarea belongs to
+    const table = textarea.closest('table');
+    if (table) {
+      const sectionName = table.querySelector('th[colspan]')?.textContent || 'ملاحظات';
+      notesModalLabel.textContent = `ملاحظات - ${sectionName}:`;
+    } else {
+      notesModalLabel.textContent = 'الملاحظات:';
+    }
+    
+    notesModal.classList.remove('hidden');
+    notesModal.classList.add('flex');
+    
+    // Focus on textarea after modal opens with delay to ensure it's rendered
+    setTimeout(() => {
+      notesModalTextarea.focus();
+      notesModalTextarea.setSelectionRange(notesModalTextarea.value.length, notesModalTextarea.value.length);
+    }, 150);
+  }
+
+  // Function to hide notes modal
+  function hideNotesModal() {
+    notesModal.classList.add('hidden');
+    notesModal.classList.remove('flex');
+    currentNotesTextarea = null;
+  }
+
+  // Function to save notes
+  function saveNotes() {
+    if (currentNotesTextarea) {
+      currentNotesTextarea.value = notesModalTextarea.value;
+      
+      // Update the print version as well
+      const printDiv = currentNotesTextarea.closest('td, div')?.querySelector('.print\\:block');
+      if (printDiv) {
+        printDiv.textContent = notesModalTextarea.value;
+      }
+      
+      // Trigger change event to update any listeners
+      currentNotesTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    hideNotesModal();
+  }
+
+  // Update character count
+  function updateCharCount() {
+    const count = notesModalTextarea.value.length;
+    notesCharCount.textContent = count;
+    notesCharCount.style.color = count > 450 ? '#dc2626' : count > 400 ? '#f59e0b' : '#6b7280';
+  }
+
+  // Add click listeners to all notes textareas
+  function setupNotesTextareas() {
+    const notesTextareas = document.querySelectorAll('textarea[placeholder*="ملاحظات"], textarea[maxlength="500"]');
+    
+    notesTextareas.forEach(textarea => {
+      // Remove readonly attribute if exists
+      textarea.removeAttribute('readonly');
+      
+      // Add click listener
+      textarea.addEventListener('click', (e) => {
+        showNotesModal(textarea);
+      });
+      
+      // Add focus listener as backup
+      textarea.addEventListener('focus', (e) => {
+        e.preventDefault();
+        textarea.blur();
+        showNotesModal(textarea);
+      });
+      
+      // Make cursor pointer to indicate clickability
+      textarea.style.cursor = 'pointer';
+      textarea.title = 'انقر للتعديل في نافذة أكبر';
+    });
+  }
+
+  // Setup notes textareas on load
+  setupNotesTextareas();
+
+  // Update character count on typing
+  if (notesModalTextarea) {
+    notesModalTextarea.addEventListener('input', updateCharCount);
+  }
+
+  // Event Listeners for Notes Modal
+  if (notesModalClose) notesModalClose.addEventListener('click', hideNotesModal);
+  if (notesCancelBtn) notesCancelBtn.addEventListener('click', hideNotesModal);
+  if (notesSaveBtn) notesSaveBtn.addEventListener('click', saveNotes);
+
+  // Close modal when clicking outside
+  if (notesModal) {
+    notesModal.addEventListener('click', (e) => {
+      if (e.target === notesModal) {
+        hideNotesModal();
+      }
+    });
+  }
+
+  // Prevent modal close when clicking inside modal content
+  const notesModalContent = notesModal?.querySelector('.bg-white');
+  if (notesModalContent) {
+    notesModalContent.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+  }
+
+  // Save with Enter key (Ctrl+Enter or Cmd+Enter)
+  if (notesModalTextarea) {
+    notesModalTextarea.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        saveNotes();
+      }
+    });
+  }
+
+  // Close notes modal with Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !notesModal.classList.contains('hidden')) {
+      hideNotesModal();
+    }
+  });
 });
