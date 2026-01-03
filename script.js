@@ -1731,11 +1731,11 @@ document.addEventListener('DOMContentLoaded', function () {
     notesModal.classList.remove('hidden');
     notesModal.classList.add('flex');
     
-    // Focus on textarea after modal opens with delay to ensure it's rendered
+    // Focus on textarea after modal opens with sufficient delay
     setTimeout(() => {
       notesModalTextarea.focus();
-      notesModalTextarea.setSelectionRange(notesModalTextarea.value.length, notesModalTextarea.value.length);
-    }, 150);
+      notesModalTextarea.select(); // Select all text for easy replacement
+    }, 200);
   }
 
   // Function to hide notes modal
@@ -1771,23 +1771,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Add click listeners to all notes textareas
   function setupNotesTextareas() {
-    const notesTextareas = document.querySelectorAll('textarea[placeholder*="ملاحظات"], textarea[maxlength="500"]');
+    const notesTextareas = document.querySelectorAll('textarea[maxlength="500"]:not(#notesModalTextarea)');
     
     notesTextareas.forEach(textarea => {
       // Remove readonly attribute if exists
       textarea.removeAttribute('readonly');
+      textarea.removeAttribute('disabled');
       
-      // Add click listener
+      // Add single click listener
       textarea.addEventListener('click', (e) => {
         showNotesModal(textarea);
-      });
-      
-      // Add focus listener as backup
-      textarea.addEventListener('focus', (e) => {
-        e.preventDefault();
-        textarea.blur();
-        showNotesModal(textarea);
-      });
+      }, { once: false });
       
       // Make cursor pointer to indicate clickability
       textarea.style.cursor = 'pointer';
@@ -1800,7 +1794,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Update character count on typing
   if (notesModalTextarea) {
-    notesModalTextarea.addEventListener('input', updateCharCount);
+    notesModalTextarea.addEventListener('input', (e) => {
+      e.stopPropagation();
+      updateCharCount();
+    }, false);
   }
 
   // Event Listeners for Notes Modal
@@ -1808,30 +1805,48 @@ document.addEventListener('DOMContentLoaded', function () {
   if (notesCancelBtn) notesCancelBtn.addEventListener('click', hideNotesModal);
   if (notesSaveBtn) notesSaveBtn.addEventListener('click', saveNotes);
 
-  // Close modal when clicking outside
+  // Close modal when clicking outside (on the backdrop only)
   if (notesModal) {
-    notesModal.addEventListener('click', (e) => {
+    notesModal.addEventListener('mousedown', (e) => {
+      // Only close if clicking directly on the backdrop, not on any child elements
       if (e.target === notesModal) {
         hideNotesModal();
       }
     });
   }
 
-  // Prevent modal close when clicking inside modal content
-  const notesModalContent = notesModal?.querySelector('.bg-white');
-  if (notesModalContent) {
-    notesModalContent.addEventListener('click', (e) => {
+  // Ensure textarea is always editable and responsive
+  if (notesModalTextarea) {
+    notesModalTextarea.addEventListener('keydown', (e) => {
       e.stopPropagation();
-    });
+      // Handle Ctrl+Enter to save
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        saveNotes();
+      }
+    }, false);
+    
+    notesModalTextarea.addEventListener('keypress', (e) => {
+      e.stopPropagation();
+    }, false);
+    
+    notesModalTextarea.addEventListener('keyup', (e) => {
+      e.stopPropagation();
+    }, false);
   }
 
   // Save with Enter key (Ctrl+Enter or Cmd+Enter)
   if (notesModalTextarea) {
     notesModalTextarea.addEventListener('keydown', (e) => {
+      // Stop propagation to prevent any parent handlers
+      e.stopPropagation();
+      
+      // Only handle Ctrl+Enter or Cmd+Enter for saving
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         saveNotes();
       }
+      // Allow all other keys for normal typing
     });
   }
 
